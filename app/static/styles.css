@@ -85,3 +85,8 @@ th { color:var(--muted); font-size:12px; font-weight:600; }
 .pager a { color:var(--primary); }
 @media(max-width:950px) {.label-layout {grid-template-columns:1fr;}}
 @media(max-width:600px) {.label-stats {gap:6px}.label-stat {padding:12px}.label-stat strong{font-size:20px}}
+
+/* Thanh xuất CSV của dataset, chỉ ghi khi có yêu cầu. */
+.csv-toolbar { display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.csv-toolbar p { margin:7px 0 0; }
+.csv-actions { display:flex; gap:8px; flex-wrap:wrap; }

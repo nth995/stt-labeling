@@ -121,3 +121,18 @@ class AnnotationHistory(Base):
     new_status: Mapped[str] = mapped_column(String(16), nullable=False)
     new_version: Mapped[int] = mapped_column(Integer, nullable=False)
     changed_at: Mapped[int] = mapped_column(Integer, nullable=False, default=utc_timestamp)
+
+
+class DatasetActivity(Base):
+    """Mỗi phiên và dataset có tín hiệu hoạt động để phát hiện ngắt mạng."""
+
+    __tablename__ = "dataset_activities"
+
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("user_sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_seen_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    ended_at: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -1,11 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Gán nhãn {{ dataset.folder_name }} · STT Labeling{% endblock %}
+{% block title %}Gán nhãn {{ dataset.folder_name }} · STT Labeling
+<script>
+(() => {
+  // Heartbeat chung cho mọi trang đã được xử lý trong base.html.
+  const base = '/labeling/{{ dataset.id }}';
+  const token = {{ csrf_token|tojson }};
+
+  // Điều hướng nội bộ không phải đóng Web: tránh ghi CSV khi chuyển mẫu.
+  let internalNavigation = false;
+  document.addEventListener('submit', () => { internalNavigation = true; }, true);
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href]');
+    if (link && link.origin === location.origin && !event.ctrlKey &&
+        !event.metaKey && !event.shiftKey && !event.altKey) {
+      internalNavigation = true;
+    }
+  }, true);
+  window.addEventListener('pagehide', () => {
+    if (internalNavigation) return;
+    const body = new FormData();
+    body.append('csrf_token', token);
+    navigator.sendBeacon(base + '/session-end', body);
+  });
+})();
+</script>
+{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
     <div class="eyebrow">GÁN NHÃN AUDIO</div>
     <h1>{{ dataset.folder_name }}</h1>
-    <p class="muted">Nghe và chỉnh sửa nhãn. Nhấn Xác nhận để lưu vào SQLite; CSV chưa được xuất ở bước này.</p>
+    <p class="muted">Nghe và chỉnh sửa nhãn. Nhấn Xác nhận để lưu SQLite. Chỉ khi nhấn Lưu CSV, tải CSV hoặc kết thúc phiên thì ứng dụng mới đồng bộ file.</p>
   </div>
   <a href="{{ '/admin/datasets' if user.role == 'admin' else '/workspace' }}" class="nav-link">← Danh sách dataset</a>
 </div>
@@ -16,6 +41,28 @@
   <div class="card label-stat"><div class="muted">Pending</div><strong>{{ counts.pending }}</strong></div>
   <div class="card label-stat"><div class="muted">Confirmed</div><strong>{{ counts.confirmed }}</strong></div>
 </div>
+<section class="card csv-toolbar">
+  <div>
+    <strong>Kết quả CSV</strong>
+    {% if dataset.version > dataset.csv_synced_version %}
+    <span class="status inactive">Có thay đổi chưa xuất CSV</span>
+    {% else %}
+    <span class="status active">Đã đồng bộ với SQLite</span>
+    {% endif %}
+    <p class="muted small">Lưu CSV xuất kết quả chung của mọi người. Xác nhận nhãn chỉ cập nhật SQLite.</p>
+  </div>
+  <div class="csv-actions">
+    <form action="/labeling/{{ dataset.id }}/save-csv" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if current %}<input type="hidden" name="sample_id" value="{{ current.id }}">{% endif %}
+      <button class="btn primary" type="submit">Lưu CSV</button>
+    </form>
+    <form action="/labeling/{{ dataset.id }}/download-csv" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn secondary" type="submit">Tải CSV về máy</button>
+    </form>
+  </div>
+</section>
 <div class="label-layout">
   <section class="card label-editor">
     <div class="dset-head">
@@ -120,4 +167,29 @@
     </div>
   </aside>
 </div>
+
+<script>
+(() => {
+  // Heartbeat chung cho mọi trang đã được xử lý trong base.html.
+  const base = '/labeling/{{ dataset.id }}';
+  const token = {{ csrf_token|tojson }};
+
+  // Điều hướng nội bộ không phải đóng Web: tránh ghi CSV khi chuyển mẫu.
+  let internalNavigation = false;
+  document.addEventListener('submit', () => { internalNavigation = true; }, true);
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href]');
+    if (link && link.origin === location.origin && !event.ctrlKey &&
+        !event.metaKey && !event.shiftKey && !event.altKey) {
+      internalNavigation = true;
+    }
+  }, true);
+  window.addEventListener('pagehide', () => {
+    if (internalNavigation) return;
+    const body = new FormData();
+    body.append('csrf_token', token);
+    navigator.sendBeacon(base + '/session-end', body);
+  });
+})();
+</script>
 {% endblock %}

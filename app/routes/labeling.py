@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.services.activity_service import mark_activity
 from app.database.models import Sample, SampleLock
 from app.services.auth_service import get_auth_context, get_csrf_token, is_valid_csrf
 from app.services.dataset_service import checked_audio_file, dataset_directory
@@ -101,6 +102,7 @@ def labeling_page(
     page = max(1, min(page, 1_000_000))
     try:
         ensure_samples(db, dataset)
+        mark_activity(db, context.session.id, dataset_id)
         sample = load_sample(db, dataset_id, sample_id) if sample_id else None
     except LabelingError as exc:
         return labeling_page_response(request, db, context, dataset, None, error=str(exc), status=status, page=page)

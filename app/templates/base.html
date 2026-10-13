@@ -24,5 +24,19 @@
     {% endif %}
   </header>
   <main class="container">{% block content %}{% endblock %}</main>
+{% if user is defined and user %}
+<script>
+(() => {
+  // Một heartbeat cho toàn bộ phiên, kể cả khi người dùng chuyển sang Workspace.
+  // Nếu đóng tất cả tab hoặc mất mạng, server sẽ ngừng nhận tín hiệu này.
+  const token = {{ csrf_token|tojson }};
+  setInterval(() => {
+    fetch('/session-heartbeat', {
+      method: 'POST', headers: {'X-CSRF-Token': token}, credentials: 'same-origin'
+    }).catch(() => {});
+  }, 30000);
+})();
+</script>
+{% endif %}
 </body>
 </html>

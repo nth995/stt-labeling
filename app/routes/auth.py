@@ -1,14 +1,15 @@
 """Đăng nhập, đăng xuất và trang dành cho người gán nhãn."""
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, Request, Header
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import Dataset, User, UserDataset
+from app.services.activity_service import finish_all_activities
+from app.database.models import Dataset, DatasetActivity, User, UserDataset
 from app.services.auth_service import (
     COOKIE_NAME,
     PASSWORD_HASHER,
@@ -92,6 +93,7 @@ def logout(
     if not is_valid_csrf(context, csrf_token):
         return HTMLResponse("Yêu cầu không hợp lệ.", status_code=403)
 
+    finish_all_activities(db, context.session.id)
     revoke_session(db, context)
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE_NAME, path="/")
@@ -121,3 +123,24 @@ def workspace(request: Request, db: Session = Depends(get_db)):
             "datasets": datasets,
         },
     )
+
+
+@router.post("/session-heartbeat")
+def global_session_heartbeat(
+    request: Request, x_csrf_token: str = Header(default=""),
+    db: Session = Depends(get_db),
+):
+    """Giữ hoạt động phiên khi người dùng chuyển sang trang Admin/Workspace."""
+    context = get_auth_context(request, db)
+    if context is None:
+        return JSONResponse({"ok": False}, status_code=401)
+    if not is_valid_csrf(context, x_csrf_token):
+        return JSONResponse({"ok": False}, status_code=403)
+    from time import time
+    db.execute(
+        update(DatasetActivity)
+        .where(DatasetActivity.session_id == context.session.id, DatasetActivity.ended_at.is_(None))
+        .values(last_seen_at=int(time()))
+    )
+    db.commit()
+    return JSONResponse({"ok": True})
