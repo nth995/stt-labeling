@@ -211,7 +211,12 @@ with sqlite3.connect(path/'annotations.sqlite3') as raw:
         self.assertLess(markup.index('id="label-editor"'), markup.index('class="card csv-toolbar"'))
         self.assertIn('scrollIntoView', markup)
         self.assertIn('previous_sample_id', markup)
-        self.assertIn('/data/', (PROJECT_ROOT/'.gitignore').read_text())
+        gitignore_lines = (PROJECT_ROOT / '.gitignore').read_text().splitlines()
+        active_rules = {line.strip() for line in gitignore_lines
+                        if line.strip() and not line.lstrip().startswith('#')}
+        self.assertIn('/data/', active_rules)
+        self.assertIn('/state/', active_rules)
+        self.assertIn('.env', active_rules)
 
     def test_admin_routes_have_csrf_and_confirmation(self):
         admin=(PROJECT_ROOT/'app/routes/admin.py').read_text()

@@ -1,7 +1,13 @@
+# Môi trường Python / tệp sinh trong quá trình chạy
 .venv/
 __pycache__/
 *.pyc
-.env
-#/data/
-state/
 .pytest_cache/
+
+# Không đưa dữ liệu, SQLite, thông tin bí mật lên Git
+#/data/
+/state/
+.env
+
+# Gói nén/tệp tạm
+*.zip

@@ -225,7 +225,7 @@ def heartbeat(
     x_csrf_token: str = Header(default=""),
     db: Session = Depends(get_db),
 ):
-    """Gia hạn khóa 10 phút khi trình duyệt còn kết nối."""
+    """Gia hạn khóa 2 phút khi trình duyệt còn kết nối."""
     context, dataset, error = request_context(request, db, dataset_id)
     if error is not None:
         return JSONResponse({"ok": False}, status_code=401 if context is None else 403)
