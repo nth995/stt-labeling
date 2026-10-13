@@ -1,30 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Gán nhãn {{ dataset.folder_name }} · STT Labeling
-<script>
-(() => {
-  // Heartbeat chung cho mọi trang đã được xử lý trong base.html.
-  const base = '/labeling/{{ dataset.id }}';
-  const token = {{ csrf_token|tojson }};
-
-  // Điều hướng nội bộ không phải đóng Web: tránh ghi CSV khi chuyển mẫu.
-  let internalNavigation = false;
-  document.addEventListener('submit', () => { internalNavigation = true; }, true);
-  document.addEventListener('click', (event) => {
-    const link = event.target.closest('a[href]');
-    if (link && link.origin === location.origin && !event.ctrlKey &&
-        !event.metaKey && !event.shiftKey && !event.altKey) {
-      internalNavigation = true;
-    }
-  }, true);
-  window.addEventListener('pagehide', () => {
-    if (internalNavigation) return;
-    const body = new FormData();
-    body.append('csrf_token', token);
-    navigator.sendBeacon(base + '/session-end', body);
-  });
-})();
-</script>
-{% endblock %}
+{% block title %}Gán nhãn {{ dataset.folder_name }} · STT Labeling{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>

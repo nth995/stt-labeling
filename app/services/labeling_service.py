@@ -38,45 +38,56 @@ def allowed_dataset(db: Session, dataset_id: int, user: User) -> Dataset:
 
 
 def ensure_samples(db: Session, dataset: Dataset) -> None:
-    """Lần đầu mở: nhập nhãn từ CSV; về sau SQLite luôn là nguồn chính."""
+    """Nhập CSV một lần theo lô nhỏ, không tải toàn bộ nhãn vào RAM."""
     exists = db.scalar(select(Sample.id).where(Sample.dataset_id == dataset.id).limit(1))
     if exists is not None:
         return
     inspection = inspect_dataset(dataset.folder_name)
     if not inspection.ready:
         raise LabelingError("Dataset chưa sẵn sàng. Hãy nhờ Admin kiểm tra/khởi tạo CSV.")
+
     directory = dataset_directory(dataset.folder_name)
     reviewed_path = directory / "label_reviewed.csv"
+    batch = []
+    try:
+        with reviewed_path.open("r", encoding="utf-8-sig", newline="") as stream:
+            reader = csv.reader(stream)
+            if next(reader, None) != ["audio_path", "label", "status"]:
+                raise LabelingError("label_reviewed.csv phải có ba cột audio_path,label,status.")
 
-    # Đọc ngoài transaction ghi để tránh giữ khóa SQLite trong lúc đọc CSV.
-    originals = list(iter_label_rows(directory))
-    with reviewed_path.open("r", encoding="utf-8-sig", newline="") as stream:
-        reader = csv.DictReader(stream)
-        reviewed = list(reader)
-    if len(originals) != len(reviewed):
-        raise LabelingError("Số dòng của hai file CSV không khớp.")
-
-    records = []
-    for index, ((audio_path, original_label), row) in enumerate(zip(originals, reviewed)):
-        if row["audio_path"] != audio_path or row["status"] not in ("pending", "confirmed"):
-            raise LabelingError("File label_reviewed.csv không nhất quán với nhãn gốc.")
-        records.append({
-            "dataset_id": dataset.id,
-            "position": index,
-            "audio_path": audio_path,
-            "original_label": original_label,
-            "current_label": row["label"],
-            "status": row["status"],
-            "version": 0,
-        })
-
-    # Giao dịch duy nhất, import trùng từ hai phiên không tạo hàng trùng.
-    # Chia theo batch để không vượt giới hạn tham số SQLite.
-    if records:
-        for offset in range(0, len(records), 100):
-            statement = sqlite_insert(Sample).values(records[offset:offset + 100])
-            db.execute(statement.on_conflict_do_nothing(index_elements=["dataset_id", "audio_path"]))
+            originals = iter_label_rows(directory)
+            # zip_longest giúp phát hiện file thiếu/thừa dòng thay vì bỏ qua.
+            from itertools import zip_longest
+            for position, (original, reviewed) in enumerate(zip_longest(originals, reader)):
+                if original is None or reviewed is None:
+                    raise LabelingError("Số mẫu ở hai file CSV không khớp.")
+                audio_path, original_label = original
+                if (len(reviewed) != 3 or reviewed[0] != audio_path
+                        or reviewed[2] not in ("pending", "confirmed")):
+                    raise LabelingError(f"label_reviewed.csv không hợp lệ ở mẫu {position + 1}.")
+                batch.append({
+                    "dataset_id": dataset.id,
+                    "position": position,
+                    "audio_path": audio_path,
+                    "original_label": original_label,
+                    "current_label": reviewed[1],
+                    "status": reviewed[2],
+                    "version": 0,
+                })
+                if len(batch) >= 100:
+                    statement = sqlite_insert(Sample).values(batch)
+                    db.execute(statement.on_conflict_do_nothing(index_elements=["dataset_id", "audio_path"]))
+                    batch.clear()
+            if batch:
+                statement = sqlite_insert(Sample).values(batch)
+                db.execute(statement.on_conflict_do_nothing(index_elements=["dataset_id", "audio_path"]))
         db.commit()
+    except (OSError, ValueError, UnicodeError, csv.Error) as error:
+        db.rollback()
+        raise LabelingError(f"Không thể nhập dataset: {error}") from error
+    except Exception:
+        db.rollback()
+        raise
 
 
 def dataset_counts(db: Session, dataset_id: int) -> dict[str, int]:

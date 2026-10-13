@@ -2,12 +2,20 @@ services:
   web:
     build: .
     container_name: stt-labeling
+    # Trùng UID/GID với tài khoản sở hữu data/ và state/ trên máy chủ.
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     ports:
-      - "8000:8000"
+      - "${APP_BIND_IP:-0.0.0.0}:${APP_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
       - ./state:/app/state
     env_file:
       - .env
+    init: true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

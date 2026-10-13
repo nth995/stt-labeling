@@ -1,6 +1,11 @@
-.git
-.venv
-__pycache__
-*.pyc
-data
-.env
+/.git
+/.venv
+/__pycache__
+**/__pycache__/
+**/*.pyc
+/data
+/state
+/tests
+/.env
+*.zip
+*.sqlite3

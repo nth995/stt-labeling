@@ -34,6 +34,13 @@ def initialize_database() -> None:
     with engine.connect() as connection:
         connection.exec_driver_sql("PRAGMA journal_mode=WAL")
     Base.metadata.create_all(bind=engine)
+    # create_all không tạo bổ sung chỉ mục ở bảng đã tồn tại.
+    # Chỉ mục giúp phân trang/lấy mẫu pending trên tập dữ liệu lớn.
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_samples_dataset_status_position "
+            "ON samples (dataset_id, status, position)"
+        )
 
 
 def get_db() -> Iterator[Session]:

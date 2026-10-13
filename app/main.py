@@ -5,9 +5,11 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from fastapi.staticfiles import StaticFiles
 
-from app.database.connection import initialize_database
+from app.database.connection import engine, initialize_database
 from app.routes import admin, admin_datasets, auth, labeling, csv_sync
 from app.services.activity_service import sync_disconnected_sessions
 from app.services.csv_sync_service import sync_dirty_on_startup
@@ -43,6 +45,19 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="STT Labeling", lifespan=lifespan)
+
+
+@app.get("/health", include_in_schema=False)
+def health_check():
+    """Kiểm tra Web và SQLite đang sẵn sàng; không trả thông tin riêng tư."""
+    try:
+        with engine.connect() as connection:
+            connection.exec_driver_sql("SELECT 1")
+    except SQLAlchemyError:
+        LOGGER.exception("Không thể truy cập SQLite trong health check")
+        return JSONResponse({"status": "unavailable"}, status_code=503)
+    return {"status": "ok"}
+
 app.mount(
     "/static",
     StaticFiles(directory=Path(__file__).parent / "static"),
