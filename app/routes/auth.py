@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.services.activity_service import finish_all_activities
+from app.services.labeling_service import release_session_locks
 from app.database.models import Dataset, DatasetActivity, User, UserDataset
 from app.services.auth_service import (
     COOKIE_NAME,
@@ -94,6 +95,8 @@ def logout(
         return HTMLResponse("Yêu cầu không hợp lệ.", status_code=403)
 
     finish_all_activities(db, context.session.id)
+    # Phiên bị thu hồi sẽ không thể tự nhả khóa về sau: phải giải phóng ngay.
+    release_session_locks(db, context.session.id)
     revoke_session(db, context)
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE_NAME, path="/")

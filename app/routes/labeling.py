@@ -16,7 +16,8 @@ from app.services.auth_service import get_auth_context, get_csrf_token, is_valid
 from app.services.dataset_service import checked_audio_file, dataset_directory
 from app.services.labeling_service import (
     LabelingError, allowed_dataset, claim_next, confirm_sample, dataset_counts,
-    ensure_samples, release_lease, renew_lease, require_lease, sample_page, try_claim,
+    ensure_samples, release_lease, renew_lease, require_lease, resume_own_sample,
+    sample_page, try_claim,
 )
 
 router = APIRouter(prefix="/labeling")
@@ -78,6 +79,11 @@ def labeling_page_response(
             "current": current_sample,
             "can_edit": bool(active_lock and active_lock.session_id == context.session.id
                              and active_lock.expires_at > time.time()),
+            "held_by_my_other_session": bool(
+                active_lock and active_lock.user_id == context.user.id
+                and active_lock.session_id != context.session.id
+                and active_lock.expires_at > time.time()
+            ),
             "draft_label": draft_label,
             "error": error or request.query_params.get("error"),
             "message": request.query_params.get("message"),
@@ -112,6 +118,7 @@ def labeling_page(
 @router.post("/{dataset_id}/next")
 def next_sample(
     dataset_id: int, request: Request, csrf_token: str = Form(...),
+    previous_sample_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Tự cấp audio pending tiếp theo."""
@@ -123,18 +130,46 @@ def next_sample(
         return rejected
     try:
         ensure_samples(db, dataset)
-        sample = claim_next(db, dataset_id, context.user.id, context.session.id)
+        sample = claim_next(db, dataset_id, context.user.id, context.session.id,
+                            exclude_sample_id=previous_sample_id)
+        if sample and previous_sample_id is not None and previous_sample_id != sample.id:
+            release_lease(db, previous_sample_id, context.session.id)
     except LabelingError as exc:
         return redirect_page(dataset_id, error=str(exc))
     if sample is None:
-        return redirect_page(dataset_id, message="Không còn mẫu pending chưa được người khác giữ.")
+        return redirect_page(dataset_id, sample_id=previous_sample_id,
+                             message="Không còn mẫu pending khác chưa được người khác giữ.")
     return redirect_page(dataset_id, sample_id=sample.id)
+
+
+@router.post("/{dataset_id}/resume")
+def resume_sample(
+    dataset_id: int, request: Request, csrf_token: str = Form(...),
+    sample_id: int | None = Form(default=None), db: Session = Depends(get_db),
+):
+    """Người dùng chủ động nhận lại audio do tài khoản mình giữ ở phiên khác."""
+    context, dataset, error = request_context(request, db, dataset_id)
+    if error is not None:
+        return error
+    rejected = protected_form(context, csrf_token)
+    if rejected is not None:
+        return rejected
+    try:
+        ensure_samples(db, dataset)
+        sample = resume_own_sample(db, dataset_id, context.user.id, context.session.id, sample_id)
+    except LabelingError as exc:
+        return redirect_page(dataset_id, error=str(exc))
+    if sample is None:
+        return redirect_page(dataset_id, message="Không có audio nào do tài khoản bạn đang giữ.")
+    return redirect_page(dataset_id, sample_id=sample.id,
+                         message="Đã nhận lại audio. Phiên cũ không thể lưu đè nhãn này.")
 
 
 @router.post("/{dataset_id}/open")
 def open_sample(
     dataset_id: int, request: Request,
     sample_id: int = Form(...), csrf_token: str = Form(...),
+    previous_sample_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Nhận mẫu được chọn thủ công, kể cả confirmed cần sửa lại."""
@@ -148,9 +183,15 @@ def open_sample(
         ensure_samples(db, dataset)
         sample = load_sample(db, dataset_id, sample_id)
         success = try_claim(db, sample, context.user.id, context.session.id)
+        if success and previous_sample_id is not None and previous_sample_id != sample.id:
+            release_lease(db, previous_sample_id, context.session.id)
     except LabelingError as exc:
         return redirect_page(dataset_id, error=str(exc))
     if not success:
+        active = db.get(SampleLock, sample_id)
+        if active is not None and active.user_id == context.user.id:
+            return redirect_page(dataset_id, sample_id=sample_id,
+                                 error="Audio thuộc phiên khác của bạn. Nhấn 'Nhận lại audio này' để tiếp tục.")
         return redirect_page(dataset_id, error="Audio đang được người khác giữ. Vui lòng chọn mẫu khác.")
     return redirect_page(dataset_id, sample_id=sample_id)
 

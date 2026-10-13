@@ -16,8 +16,9 @@ from sqlalchemy import select, update
 
 from app.config import STATE_DIR
 from app.database.connection import SessionLocal
-from app.database.models import Dataset, Sample
+from app.database.models import Dataset, Sample, DatasetSourceState
 from app.services.dataset_service import dataset_directory
+from app.services.labeling_service import ensure_samples, _file_digest
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +51,12 @@ def sync_dataset_csv(dataset_id: int, force: bool = False) -> SyncResult:
     with _lock_path(dataset_id).open("a+b") as lock_stream:
         fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX)
         try:
+            # Đối soát nguồn trước khi xuất: thêm mẫu mới an toàn hoặc từ chối nguồn đã sửa.
+            with SessionLocal() as check_db:
+                checked = check_db.get(Dataset, dataset_id)
+                if checked is None:
+                    raise ValueError("Không tìm thấy dataset.")
+                ensure_samples(check_db, checked)
             with SessionLocal() as db:
                 # Khởi đầu giao dịch đọc thật sự trước SELECT đầu tiên để toàn
                 # bộ nhãn và số version đến từ cùng một SQLite snapshot.
@@ -61,6 +68,9 @@ def sync_dataset_csv(dataset_id: int, force: bool = False) -> SyncResult:
                 target = directory / "label_reviewed.csv"
                 version = dataset.version
                 synchronized = dataset.csv_synced_version
+                baseline = db.get(DatasetSourceState, dataset_id)
+                source_signature = (baseline.source_size, baseline.source_mtime_ns)
+                reviewed_signature = (baseline.reviewed_size, baseline.reviewed_mtime_ns)
                 if not force and version <= synchronized and target.is_file():
                     return SyncResult(dataset_id, version, version, 0, True, target)
 
@@ -88,6 +98,12 @@ def sync_dataset_csv(dataset_id: int, force: bool = False) -> SyncResult:
                     # Nếu chưa có sample, không được ghi đè CSV gốc bằng file rỗng.
                     if count == 0:
                         raise ValueError("Dataset chưa nhập audio vào SQLite; hãy mở dataset trước.")
+                    # CSV nguồn và file kết quả không được đổi bên ngoài khi đang ghi.
+                    source_stat = (directory / "label.csv").stat()
+                    target_stat = target.stat()
+                    if ((source_stat.st_size, source_stat.st_mtime_ns) != source_signature or
+                        (target_stat.st_size, target_stat.st_mtime_ns) != reviewed_signature):
+                        raise ValueError("CSV bị thay đổi ngoài ứng dụng trong lúc xuất, đã hủy thao tác.")
                     os.replace(temporary, target)
                     temporary = None
                     # Đẩy metadata thay đổi xuống đĩa sau khi rename thành công.
@@ -101,7 +117,12 @@ def sync_dataset_csv(dataset_id: int, force: bool = False) -> SyncResult:
                         temporary.unlink(missing_ok=True)
                 db.rollback()  # Đóng read snapshot trước khi ghi mốc đồng bộ.
 
+            exported_stat = target.stat()
             with SessionLocal.begin() as db:
+                state = db.get(DatasetSourceState, dataset_id)
+                state.reviewed_size = exported_stat.st_size
+                state.reviewed_mtime_ns = exported_stat.st_mtime_ns
+                state.reviewed_digest = _file_digest(target)
                 db.execute(
                     update(Dataset)
                     .where(Dataset.id == dataset_id, Dataset.csv_synced_version < version)

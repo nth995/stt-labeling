@@ -90,3 +90,37 @@ th { color:var(--muted); font-size:12px; font-weight:600; }
 .csv-toolbar { display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between; align-items:center; margin-bottom:16px; }
 .csv-toolbar p { margin:7px 0 0; }
 .csv-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+
+/* Tối ưu thao tác nghe – nhập – xác nhận không phải cuộn trang. */
+.label-editor {scroll-margin-top: 12px;}
+.label-editor .label-field {margin: 12px 0;}
+.label-editor .label-audio {margin: 6px 0;}
+.label-editor .dset-head {margin-bottom: 6px;}
+.label-editor .dset-head h2 {margin-bottom: 0;}
+.label-editor .original-label {min-height: 36px; padding: 9px 11px; max-height: 100px; overflow:auto;}
+.label-editor textarea {min-height: 75px; max-height: 45vh;}
+.label-editor .stack {gap: 9px;}
+.label-editor .release-form {margin-top: 7px;}
+.label-layout {align-items:start;}
+.label-stats.compact-stats {display:flex;gap:15px;flex-wrap:wrap;margin:0 0 12px;
+  color:var(--muted); font-size:13px;}
+.compact-stats span strong {color:var(--ink);margin-left:5px;}
+.csv-toolbar {margin-top:20px;}
+.held-locks,.delete-user {margin-top:8px;font-size:12px;border-top:1px solid var(--line);padding-top:8px;}
+.held-locks summary,.delete-user summary {cursor:pointer;color:var(--primary);font-weight:600;}
+.delete-user summary {color:#a42626;}
+.held-locks .lock-item {display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0;}
+.held-locks .lock-item span {overflow-wrap:anywhere;min-width:0;}
+.delete-user form {display:flex; flex-wrap:wrap;gap:8px;margin-top:7px;}
+.delete-user input {min-width:170px;max-width:250px;}
+.btn.danger {background:#b42318;color:#fff;border:1px solid #b42318;}
+.btn.danger:hover {background:#912018;}
+@media (min-width: 951px) {
+  .label-editor {position:sticky; top:12px;}
+  .sample-list {max-height:60vh;overflow-y:auto;}
+}
+
+/* Các nút nhận mẫu và nhận lại mẫu giữ sát vùng biên tập. */
+.label-pick-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.label-pick-actions form { margin: 0; }

@@ -40,6 +40,36 @@
               <button class="btn secondary compact" type="submit">Đổi mật khẩu</button>
             </form>
           </div>
+          {% if locks_by_user.get(account.id) %}
+          <details class="held-locks">
+            <summary>Đang giữ {{ locks_by_user[account.id]|length }} audio · Quản lý khóa</summary>
+            {% for lease in locks_by_user[account.id] %}
+              <div class="lock-item">
+                <span title="{{ lease.audio_path }}">{{ lease.dataset_name }}/{{ lease.audio_path }}</span>
+                <form method="post" action="/admin/users/{{ account.id }}/release-locks" onsubmit="return confirm('Giải phóng audio này? Nhãn chưa xác nhận có thể mất.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="sample_id" value="{{ lease.sample_id }}">
+                  <button class="btn secondary compact" type="submit">Gỡ audio</button>
+                </form>
+              </div>
+            {% endfor %}
+            <form method="post" action="/admin/users/{{ account.id }}/release-locks" onsubmit="return confirm('Giải phóng tất cả audio của tài khoản này?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn secondary compact" type="submit">Gỡ tất cả khóa</button>
+            </form>
+          </details>
+          {% endif %}
+          <details class="delete-user">
+            <summary>Xóa tài khoản</summary>
+            <p class="muted small">Xóa đăng nhập và quyền truy cập, giữ nguyên nhãn đã xác nhận.</p>
+            <form method="post" action="/admin/users/{{ account.id }}/delete"
+                  onsubmit="return confirm('Xóa tài khoản {{ account.username }}? Thao tác này không thể hoàn tác.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="text" name="confirm_username" placeholder="Nhập chính xác {{ account.username }}"
+                aria-label="Xác nhận tên tài khoản {{ account.username }}" required autocomplete="off">
+              <button class="btn danger compact" type="submit">Xóa tài khoản</button>
+            </form>
+          </details>
           {% else %}<span class="muted small">Quản lý Admin bằng Terminal</span>{% endif %}
         </td>
       </tr>

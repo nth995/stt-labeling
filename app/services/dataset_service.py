@@ -3,6 +3,8 @@
 import csv
 import os
 import tempfile
+import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -94,22 +96,75 @@ def checked_audio_file(directory: Path, raw_path: str) -> bool:
     )
 
 
+def normalize_audio_path(raw: str) -> str:
+    """Chuẩn hóa dấu phân cách để cùng một audio chỉ có một khóa định danh."""
+    from pathlib import PurePosixPath
+    path = raw.replace("\\", "/")
+    if not path or path.startswith("/") or ":" in path or "\x00" in path:
+        raise ValueError("Đường dẫn audio không hợp lệ.")
+    parts = path.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError("Đường dẫn audio có thành phần không hợp lệ.")
+    return PurePosixPath(path).as_posix()
+
+
+class DuplicatePathChecker:
+    """Chống trùng bằng bộ nhớ nhỏ, chuyển sang SQLite tạm khi dữ liệu lớn."""
+    def __init__(self, threshold: int = 10000):
+        self.threshold = threshold
+        self.seen = set()
+        self.connection = None
+        self.file = None
+
+    def add(self, path: str) -> bool:
+        """Trả False nếu đường dẫn đã xuất hiện."""
+        if self.connection is None and len(self.seen) < self.threshold:
+            if path in self.seen:
+                return False
+            self.seen.add(path)
+            return True
+        if self.connection is None:
+            descriptor, name = tempfile.mkstemp(prefix=".stt_paths_", suffix=".db")
+            os.close(descriptor)
+            self.file = Path(name)
+            self.connection = sqlite3.connect(name)
+            self.connection.execute("CREATE TABLE paths (path TEXT PRIMARY KEY) WITHOUT ROWID")
+            self.connection.executemany("INSERT INTO paths VALUES (?)", ((value,) for value in self.seen))
+            self.seen.clear()
+        try:
+            self.connection.execute("INSERT INTO paths VALUES (?)", (path,))
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def close(self) -> None:
+        """Đóng SQLite tạm và xóa file nếu từng sử dụng."""
+        if self.connection is not None:
+            self.connection.close()
+        if self.file is not None:
+            self.file.unlink(missing_ok=True)
+
+
 def iter_label_rows(directory: Path):
-    """Duyệt nhãn gốc, kiểm tra đủ hai cột và không trùng audio_path."""
-    path = directory / "label.csv"
-    seen = set()
-    with path.open("r", encoding="utf-8-sig", newline="") as stream:
-        reader = csv.reader(stream)
-        if next(reader, None) != ["audio_path", "label"]:
-            raise ValueError("label.csv phải có đúng header: audio_path,label")
-        for number, row in enumerate(reader, start=2):
-            if len(row) != 2:
-                raise ValueError(f"label.csv dòng {number}: cần đúng 2 cột.")
-            audio_path, label = row
-            if audio_path in seen:
-                raise ValueError(f"label.csv dòng {number}: audio_path trùng nhau.")
-            seen.add(audio_path)
-            yield audio_path, label
+    """Đọc lần lượt nhãn gốc, chuẩn hóa đường dẫn và chống trùng giới hạn RAM."""
+    checker = DuplicatePathChecker()
+    try:
+        with (directory / "label.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+            reader = csv.reader(stream)
+            if next(reader, None) != ["audio_path", "label"]:
+                raise ValueError("label.csv phải có đúng header: audio_path,label")
+            for number, row in enumerate(reader, start=2):
+                if len(row) != 2:
+                    raise ValueError(f"label.csv dòng {number}: cần đúng 2 cột.")
+                try:
+                    audio_path = normalize_audio_path(row[0])
+                except ValueError as error:
+                    raise ValueError(f"label.csv dòng {number}: {error}") from error
+                if not checker.add(audio_path):
+                    raise ValueError(f"label.csv dòng {number}: audio_path trùng sau chuẩn hóa.")
+                yield audio_path, row[1]
+    finally:
+        checker.close()
 
 
 def verify_reviewed_csv(directory: Path):
@@ -123,7 +178,7 @@ def verify_reviewed_csv(directory: Path):
             reviewed = next(reader, None)
             if reviewed is None or len(reviewed) != 3:
                 raise ValueError(f"label_reviewed.csv thiếu mẫu hoặc sai cột ở dòng {line_no}.")
-            if reviewed[0] != original[0]:
+            if normalize_audio_path(reviewed[0]) != original[0]:
                 raise ValueError(f"label_reviewed.csv khác thứ tự audio_path ở dòng {line_no}.")
             if reviewed[2] not in ("pending", "confirmed"):
                 raise ValueError(f"label_reviewed.csv có trạng thái không hợp lệ ở dòng {line_no}.")
@@ -190,12 +245,15 @@ def initialize_dataset_files(folder_name: str) -> str:
     messages = []
 
     if not source_file.exists():
-        paths = [audio.relative_to(directory).as_posix() for audio in iter_audio_files(directory)]
-        if not paths:
+        count = sum(1 for _ in iter_audio_files(directory))
+        if not count:
             raise ValueError("Dataset chưa có audio để khởi tạo nhãn.")
         try:
-            write_csv_new(source_file, ["audio_path", "label"], ((path, "") for path in sorted(paths)))
-            messages.append(f"Đã tạo label.csv cho {len(paths)} audio.")
+            write_csv_new(
+                source_file, ["audio_path", "label"],
+                ((audio.relative_to(directory).as_posix(), "") for audio in iter_audio_files(directory)),
+            )
+            messages.append(f"Đã tạo label.csv cho {count} audio.")
         except FileExistsError:
             messages.append("label.csv đã được tạo từ một phiên khác.")
 

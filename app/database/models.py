@@ -136,3 +136,15 @@ class DatasetActivity(Base):
     )
     last_seen_at: Mapped[int] = mapped_column(Integer, nullable=False)
     ended_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class DatasetSourceState(Base):
+    """Mốc thay đổi của CSV nguồn/CSV kết quả để đối soát dữ liệu."""
+
+    __tablename__ = "dataset_source_states"
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("datasets.id", ondelete="CASCADE"), primary_key=True)
+    source_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_mtime_ns: Mapped[int] = mapped_column(Integer, nullable=False)
+    reviewed_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    reviewed_mtime_ns: Mapped[int] = mapped_column(Integer, nullable=False)
+    reviewed_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")

@@ -7,13 +7,13 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pwdlib import PasswordHash
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import MIN_PASSWORD_LENGTH
 from app.database.connection import get_db
-from app.database.models import User, utc_timestamp
+from app.database.models import User, UserSession, SampleLock, Sample, Dataset, utc_timestamp
 from app.services.auth_service import (
     get_auth_context,
     get_csrf_token,
@@ -59,12 +59,26 @@ def list_users(request: Request, db: Session = Depends(get_db)):
     if response is not None:
         return response
     users = db.scalars(select(User).order_by(User.id)).all()
+    held = db.execute(
+        select(SampleLock, Sample.audio_path, Dataset.folder_name)
+        .join(Sample, Sample.id == SampleLock.sample_id)
+        .join(Dataset, Dataset.id == Sample.dataset_id)
+        .where(SampleLock.expires_at > utc_timestamp())
+        .order_by(SampleLock.user_id, Dataset.folder_name, Sample.position)
+    ).all()
+    locks_by_user = {}
+    for lease, audio_path, dataset_name in held:
+        locks_by_user.setdefault(lease.user_id, []).append({
+            "sample_id": lease.sample_id, "dataset_name": dataset_name,
+            "audio_path": audio_path, "expires_at": lease.expires_at,
+        })
     return templates.TemplateResponse(
         request=request,
         name="admin_users.html",
         context={
             "user": context.user,
             "users": users,
+            "locks_by_user": locks_by_user,
             "csrf_token": get_csrf_token(context),
             "min_password_length": MIN_PASSWORD_LENGTH,
             "message": request.query_params.get("message"),
@@ -122,6 +136,7 @@ def toggle_user(
     user.updated_at = utc_timestamp()
     if not user.is_active:
         revoke_user_sessions(db, user.id)
+        db.execute(delete(SampleLock).where(SampleLock.user_id == user.id))
     db.commit()
     return notice(f"Đã {'mở' if user.is_active else 'khóa'} tài khoản {user.username}.")
 
@@ -148,3 +163,46 @@ def reset_user_password(
     revoke_user_sessions(db, user.id)
     db.commit()
     return notice(f"Đã đặt lại mật khẩu cho {user.username}.")
+
+
+@router.post("/users/{user_id}/release-locks")
+def release_user_locks(
+    user_id: int, request: Request, csrf_token: str = Form(...),
+    sample_id: int | None = Form(default=None), db: Session = Depends(get_db),
+):
+    """Admin trả lại một hoặc toàn bộ audio đang bị tài khoản giữ."""
+    response = checked_admin(request, db, csrf_token)
+    if response is not None:
+        return response
+    account = db.get(User, user_id)
+    if account is None or account.role != "annotator":
+        return notice("Không tìm thấy tài khoản Annotator.", error=True)
+    statement = delete(SampleLock).where(SampleLock.user_id == user_id)
+    if sample_id is not None:
+        statement = statement.where(SampleLock.sample_id == sample_id)
+    amount = db.execute(statement).rowcount
+    db.commit()
+    return notice(f"Đã giải phóng {amount} khóa audio của {account.username}.")
+
+
+@router.post("/users/{user_id}/delete")
+def delete_annotator(
+    user_id: int, request: Request, confirm_username: str = Form(...),
+    csrf_token: str = Form(...), db: Session = Depends(get_db),
+):
+    """Xóa Annotator và phiên/khóa liên quan, giữ nhãn và lịch sử đã gán."""
+    response = checked_admin(request, db, csrf_token)
+    if response is not None:
+        return response
+    account = db.get(User, user_id)
+    if account is None or account.role != "annotator":
+        return notice("Chỉ được xóa tài khoản Annotator.", error=True)
+    if confirm_username.strip() != account.username:
+        return notice("Nhập đúng tên tài khoản để xác nhận xóa.", error=True)
+    username = account.username
+    # FK ON DELETE SET NULL tại annotations/history; xóa User không xóa nhãn.
+    db.execute(delete(SampleLock).where(SampleLock.user_id == user_id))
+    db.execute(delete(UserSession).where(UserSession.user_id == user_id))
+    db.delete(account)
+    db.commit()
+    return notice(f"Đã xóa tài khoản {username}, giữ nguyên nhãn và lịch sử chỉnh sửa.")

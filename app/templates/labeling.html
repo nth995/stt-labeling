@@ -5,47 +5,33 @@
   <div>
     <div class="eyebrow">GÁN NHÃN AUDIO</div>
     <h1>{{ dataset.folder_name }}</h1>
-    <p class="muted">Nghe và chỉnh sửa nhãn. Nhấn Xác nhận để lưu SQLite. Chỉ khi nhấn Lưu CSV, tải CSV hoặc kết thúc phiên thì ứng dụng mới đồng bộ file.</p>
+    <p class="muted small">Xác nhận nhãn lưu vào SQLite; kết quả CSV được xuất riêng.</p>
   </div>
   <a href="{{ '/admin/datasets' if user.role == 'admin' else '/workspace' }}" class="nav-link">← Danh sách dataset</a>
 </div>
 {% if message %}<div class="notice success">{{ message }}</div>{% endif %}
 {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
-<div class="label-stats">
-  <div class="card label-stat"><div class="muted">Tổng mẫu</div><strong>{{ counts.total }}</strong></div>
-  <div class="card label-stat"><div class="muted">Pending</div><strong>{{ counts.pending }}</strong></div>
-  <div class="card label-stat"><div class="muted">Confirmed</div><strong>{{ counts.confirmed }}</strong></div>
+<div class="label-stats compact-stats" aria-label="Tiến độ gán nhãn">
+  <span>Tổng <strong>{{ counts.total }}</strong></span>
+  <span>Pending <strong>{{ counts.pending }}</strong></span>
+  <span>Confirmed <strong>{{ counts.confirmed }}</strong></span>
 </div>
-<section class="card csv-toolbar">
-  <div>
-    <strong>Kết quả CSV</strong>
-    {% if dataset.version > dataset.csv_synced_version %}
-    <span class="status inactive">Có thay đổi chưa xuất CSV</span>
-    {% else %}
-    <span class="status active">Đã đồng bộ với SQLite</span>
-    {% endif %}
-    <p class="muted small">Lưu CSV xuất kết quả chung của mọi người. Xác nhận nhãn chỉ cập nhật SQLite.</p>
-  </div>
-  <div class="csv-actions">
-    <form action="/labeling/{{ dataset.id }}/save-csv" method="post">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      {% if current %}<input type="hidden" name="sample_id" value="{{ current.id }}">{% endif %}
-      <button class="btn primary" type="submit">Lưu CSV</button>
-    </form>
-    <form action="/labeling/{{ dataset.id }}/download-csv" method="post">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn secondary" type="submit">Tải CSV về máy</button>
-    </form>
-  </div>
-</section>
 <div class="label-layout">
-  <section class="card label-editor">
+  <section class="card label-editor" id="label-editor">
     <div class="dset-head">
       <h2>Nghe và gán nhãn</h2>
-      <form action="/labeling/{{ dataset.id }}/next" method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn primary">Nhận audio pending tiếp theo →</button>
-      </form>
+      <div class="label-pick-actions">
+        <form action="/labeling/{{ dataset.id }}/next" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          {% if current %}<input type="hidden" name="previous_sample_id" value="{{ current.id }}">{% endif %}
+          <button type="submit" class="btn primary">Nhận audio pending tiếp theo →</button>
+        </form>
+        <form action="/labeling/{{ dataset.id }}/resume" method="post"
+              onsubmit="return confirm('Nhận lại audio của bạn có thể ngắt quyền lưu của một tab/thiết bị khác đang dùng cùng tài khoản. Tiếp tục?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn secondary">Nhận lại audio của tôi</button>
+        </form>
+      </div>
     </div>
     {% if current %}
     <p class="muted small">#{{ current.position + 1 }} · {{ current.audio_path }}</p>
@@ -66,7 +52,7 @@
         <input type="hidden" name="sample_id" value="{{ current.id }}">
         <input type="hidden" name="version" value="{{ current.version }}">
         <label>Nhãn chỉnh sửa
-          <textarea id="label-text" name="label" rows="5" maxlength="10000" placeholder="Nghe audio rồi nhập nội dung...">{{ draft_label if draft_label is not none else current.current_label }}</textarea>
+          <textarea id="label-text" name="label" rows="3" maxlength="10000" placeholder="Nghe audio rồi nhập nội dung...">{{ draft_label if draft_label is not none else current.current_label }}</textarea>
         </label>
         <label class="inline-check"><input type="checkbox" name="no_speech" value="true" id="no-speech">Xác nhận audio không có lời nói (nhãn để trống)</label>
         <div class="label-actions">
@@ -110,6 +96,14 @@
       </script>
     {% else %}
       <div class="notice error">Audio không được phiên hiện tại giữ hoặc khóa đã hết hạn. Hãy chọn lại mẫu trong danh sách để chỉnh sửa.</div>
+      {% if held_by_my_other_session %}
+      <form action="/labeling/{{ dataset.id }}/resume" method="post"
+            onsubmit="return confirm('Nhận lại audio này sẽ làm phiên cũ không thể lưu nhãn nữa. Tiếp tục?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="sample_id" value="{{ current.id }}">
+        <button class="btn primary" type="submit">Nhận lại audio này</button>
+      </form>
+      {% endif %}
     {% endif %}
     {% else %}
     <p class="muted">Nhấn <b>Nhận audio pending tiếp theo</b> hoặc mở một mẫu từ danh sách bên phải.</p>
@@ -127,6 +121,7 @@
       <form class="sample-row" action="/labeling/{{ dataset.id }}/open" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="sample_id" value="{{ sample.id }}">
+        {% if current %}<input type="hidden" name="previous_sample_id" value="{{ current.id }}">{% endif %}
         <div class="sample-info"><span class="small muted">#{{ sample.position + 1 }} · {{ sample.status }}</span>
           <div class="sample-path">{{ sample.audio_path }}</div></div>
         <button class="btn secondary compact" type="submit">Mở</button>
@@ -143,9 +138,39 @@
   </aside>
 </div>
 
+<section class="card csv-toolbar">
+  <div>
+    <strong>Kết quả CSV</strong>
+    {% if dataset.version > dataset.csv_synced_version %}
+    <span class="status inactive">Có thay đổi chưa xuất CSV</span>
+    {% else %}
+    <span class="status active">Đã đồng bộ với SQLite</span>
+    {% endif %}
+    <p class="muted small">Lưu CSV xuất kết quả chung của mọi người. Xác nhận nhãn chỉ cập nhật SQLite.</p>
+  </div>
+  <div class="csv-actions">
+    <form action="/labeling/{{ dataset.id }}/save-csv" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if current %}<input type="hidden" name="sample_id" value="{{ current.id }}">{% endif %}
+      <button class="btn primary" type="submit">Lưu CSV</button>
+    </form>
+    <form action="/labeling/{{ dataset.id }}/download-csv" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn secondary" type="submit">Tải CSV về máy</button>
+    </form>
+  </div>
+</section>
+
 <script>
 (() => {
-  // Heartbeat chung cho mọi trang đã được xử lý trong base.html.
+  // Đưa vùng gán nhãn vào ngay tầm nhìn sau mỗi lần chuyển audio.
+  {% if current %}
+  const editor = document.getElementById('label-editor');
+  if (editor) {
+    requestAnimationFrame(() => editor.scrollIntoView({block: 'start', behavior: 'instant'}));
+  }
+  {% endif %}
+  // Theo dõi phiên đóng tab; không đồng bộ CSV khi điều hướng trong Web.
   const base = '/labeling/{{ dataset.id }}';
   const token = {{ csrf_token|tojson }};
 

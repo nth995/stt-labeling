@@ -79,5 +79,11 @@ def sync_disconnected_sessions() -> None:
                 if record is None or record.ended_at is not None or record.last_seen_at >= cutoff:
                     continue
                 finish_activity(db, session_id, dataset_id)
+                # Chỉ giải phóng khi lượt đã thực sự kết thúc và không nhận heartbeat mới.
+                activity = db.get(DatasetActivity, (session_id, dataset_id))
+                if (activity is not None and activity.ended_at is not None
+                        and activity.last_seen_at < cutoff):
+                    from app.services.labeling_service import release_session_locks
+                    release_session_locks(db, session_id, dataset_id)
         except (OSError, ValueError) as error:
             LOGGER.warning("Không thể xuất CSV khi phiên ngắt (dataset=%s): %s", dataset_id, error)

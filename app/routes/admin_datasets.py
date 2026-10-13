@@ -5,12 +5,12 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import Dataset, User, UserDataset
+from app.database.models import Dataset, User, UserDataset, Sample, SampleLock
 from app.routes.admin import admin_context
 from app.services.auth_service import get_csrf_token, is_valid_csrf
 from app.services.dataset_service import (
@@ -149,6 +149,12 @@ def update_dataset_permissions(
         relation = db.get(UserDataset, (user_id, dataset.id))
         if relation is not None:
             db.delete(relation)
+    # Thu hồi luôn những khóa audio của người vừa mất quyền dataset.
+    if current - requested:
+        sample_ids = select(Sample.id).where(Sample.dataset_id == dataset.id)
+        db.execute(delete(SampleLock).where(
+            SampleLock.user_id.in_(current - requested), SampleLock.sample_id.in_(sample_ids)
+        ))
     try:
         db.commit()
     except IntegrityError:
