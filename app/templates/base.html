@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}STT Labeling{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">STT</span><span>Labeling Tool</span></div>
+    {% if user is defined and user %}
+    <div class="header-right">
+      <span class="muted">{{ user.username }} · {{ 'Quản trị' if user.role == 'admin' else 'Gán nhãn' }}</span>
+      <form action="/logout" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn secondary" type="submit">Đăng xuất</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+  <main class="container">{% block content %}{% endblock %}</main>
+</body>
+</html>

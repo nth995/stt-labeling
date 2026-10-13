@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Đăng nhập · STT Labeling{% endblock %}
+{% block content %}
+<section class="login-panel card">
+  <div class="eyebrow">STT LABELING</div>
+  <h1>Đăng nhập</h1>
+  <p class="muted">Sử dụng tài khoản do quản trị viên cấp.</p>
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" class="stack">
+    <label>Tài khoản<input name="username" type="text" value="{{ username }}" autocomplete="username" required autofocus></label>
+    <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">Đăng nhập</button>
+  </form>
+</section>
+{% endblock %}

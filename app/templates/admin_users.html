@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Quản lý tài khoản · STT Labeling{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="eyebrow">QUẢN TRỊ</div><h1>Quản lý tài khoản</h1>
+  <p class="muted">Tạo và quản lý tài khoản gán nhãn dùng chung trong mạng LAN.</p></div>
+  <div class="count">{{ users|length }} tài khoản</div></div>
+{% if message %}<div class="notice success">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+<div class="admin-layout">
+  <section class="card">
+    <h2>Cấp tài khoản mới</h2>
+    <form method="post" action="/admin/users/create" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Tên tài khoản<input name="username" type="text" minlength="3" maxlength="64" pattern="[a-zA-Z0-9_.-]+" autocomplete="off" required placeholder="user01"></label>
+      <label>Mật khẩu ban đầu<input name="password" type="password" minlength="{{ min_password_length }}" autocomplete="new-password" required></label>
+      <p class="muted small">Tài khoản mới có vai trò Annotator. Mật khẩu tối thiểu {{ min_password_length }} ký tự.</p>
+      <button class="btn primary" type="submit">Tạo tài khoản</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Danh sách người dùng</h2>
+    <div class="table-wrap">
+    <table><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+    <tbody>
+    {% for account in users %}
+      <tr>
+        <td><strong>{{ account.username }}</strong></td>
+        <td>{{ 'Admin' if account.role == 'admin' else 'Annotator' }}</td>
+        <td><span class="status {{ 'active' if account.is_active else 'inactive' }}">{{ 'Hoạt động' if account.is_active else 'Đã khóa' }}</span></td>
+        <td>
+          {% if account.role == 'annotator' %}
+          <div class="actions">
+            <form method="post" action="/admin/users/{{ account.id }}/toggle">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn secondary compact" type="submit">{{ 'Khóa' if account.is_active else 'Mở khóa' }}</button>
+            </form>
+            <form method="post" action="/admin/users/{{ account.id }}/reset-password" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="password" name="password" minlength="{{ min_password_length }}" required placeholder="Mật khẩu mới" aria-label="Mật khẩu mới cho {{ account.username }}">
+              <button class="btn secondary compact" type="submit">Đổi mật khẩu</button>
+            </form>
+          </div>
+          {% else %}<span class="muted small">Quản lý Admin bằng Terminal</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody></table>
+    </div>
+  </section>
+</div>
+<p class="muted small note">Bước tiếp theo: cấp quyền truy cập dataset cho từng Annotator.</p>
+{% endblock %}
