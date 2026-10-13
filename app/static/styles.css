@@ -59,3 +59,29 @@ th { color:var(--muted); font-size:12px; font-weight:600; }
 .dset-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:16px 0 22px; }
 .dset-row-note { border-top:1px solid var(--line); padding-top:16px; margin-top:16px; }
 @media(max-width:600px) {.nav-link { font-size:12px; }}
+
+/* Giai đoạn 4: trình phát audio và bảng nhãn */
+.label-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-bottom:20px; }
+.label-stat { padding:17px 22px; }
+.label-stat strong { font-size:28px; display:block; margin-top:5px; }
+.label-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr); gap:20px; align-items:start; }
+.label-editor h2, .label-list h2 { margin:0 0 16px; }
+.label-audio { width:100%; margin:12px 0; }
+.label-field { margin:22px 0; }
+.field-label { font-size:13px; font-weight:650; margin-bottom:8px; }
+.original-label { min-height:54px; padding:14px; border-radius:8px; background:#f4f6fa; white-space:pre-wrap; overflow-wrap:anywhere; }
+.label-editor textarea { width:100%; resize:vertical; font:inherit; padding:12px; border:1px solid #cdd5e0; border-radius:8px; }
+.inline-check { flex-direction:row; align-items:center; font-weight:500; }
+.inline-check input { width:auto; }
+.label-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.release-form { margin-top:12px; }
+.label-filters { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.filter-link { text-decoration:none; color:#64748b; font-size:13px; padding:6px 9px; border-radius:7px; }
+.filter-link.chosen { background:#e7efff; color:#1d4ed8; font-weight:700; }
+.sample-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding:12px 0; }
+.sample-info { min-width:0; }
+.sample-path { font-size:13px; overflow-wrap:anywhere; margin-top:4px; }
+.pager { display:flex; gap:15px; justify-content:center; padding-top:15px; font-size:13px; }
+.pager a { color:var(--primary); }
+@media(max-width:950px) {.label-layout {grid-template-columns:1fr;}}
+@media(max-width:600px) {.label-stats {gap:6px}.label-stat {padding:12px}.label-stat strong{font-size:20px}}

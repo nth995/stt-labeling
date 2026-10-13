@@ -51,6 +51,9 @@
   </form>
   {% endif %}
   {% endif %}
+  {% if not entry.missing and entry.details.ready %}
+  <p><a href="/labeling/{{ dataset.id }}" class="btn secondary">Mở gán nhãn (Admin)</a></p>
+  {% endif %}
   <div class="dset-row-note">
     <strong>Annotator được phép truy cập</strong>
     <p class="muted small">Tích chọn tài khoản rồi nhấn Lưu phân quyền. Bỏ chọn để thu hồi quyền.</p>

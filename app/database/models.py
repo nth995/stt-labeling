@@ -72,3 +72,52 @@ class UserSession(Base):
     last_seen_at: Mapped[int] = mapped_column(Integer, nullable=False, default=utc_timestamp)
     expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
     revoked_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class Sample(Base):
+    """Một audio và nhãn đang làm việc trong SQLite; giữ nguyên CSV gốc."""
+
+    __tablename__ = "samples"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "audio_path", name="uq_sample_dataset_path"),
+        UniqueConstraint("dataset_id", "position", name="uq_sample_dataset_position"),
+        CheckConstraint("status IN ('pending','confirmed')", name="ck_sample_status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("datasets.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    audio_path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    original_label: Mapped[str] = mapped_column(String, nullable=False, default="")
+    current_label: Mapped[str] = mapped_column(String, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    updated_at: Mapped[int | None] = mapped_column(Integer)
+
+
+class SampleLock(Base):
+    """Quyền giữ mẫu trong thời gian giới hạn theo phiên đăng nhập."""
+
+    __tablename__ = "sample_locks"
+
+    sample_id: Mapped[int] = mapped_column(ForeignKey("samples.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("user_sessions.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AnnotationHistory(Base):
+    """Nhật ký thay đổi nhãn và trạng thái đã xác nhận."""
+
+    __tablename__ = "annotation_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sample_id: Mapped[int] = mapped_column(ForeignKey("samples.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    old_label: Mapped[str] = mapped_column(String, nullable=False)
+    new_label: Mapped[str] = mapped_column(String, nullable=False)
+    old_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    new_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    new_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_at: Mapped[int] = mapped_column(Integer, nullable=False, default=utc_timestamp)

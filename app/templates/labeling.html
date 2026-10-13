@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Gán nhãn {{ dataset.folder_name }} · STT Labeling{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">GÁN NHÃN AUDIO</div>
+    <h1>{{ dataset.folder_name }}</h1>
+    <p class="muted">Nghe và chỉnh sửa nhãn. Nhấn Xác nhận để lưu vào SQLite; CSV chưa được xuất ở bước này.</p>
+  </div>
+  <a href="{{ '/admin/datasets' if user.role == 'admin' else '/workspace' }}" class="nav-link">← Danh sách dataset</a>
+</div>
+{% if message %}<div class="notice success">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+<div class="label-stats">
+  <div class="card label-stat"><div class="muted">Tổng mẫu</div><strong>{{ counts.total }}</strong></div>
+  <div class="card label-stat"><div class="muted">Pending</div><strong>{{ counts.pending }}</strong></div>
+  <div class="card label-stat"><div class="muted">Confirmed</div><strong>{{ counts.confirmed }}</strong></div>
+</div>
+<div class="label-layout">
+  <section class="card label-editor">
+    <div class="dset-head">
+      <h2>Nghe và gán nhãn</h2>
+      <form action="/labeling/{{ dataset.id }}/next" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn primary">Nhận audio pending tiếp theo →</button>
+      </form>
+    </div>
+    {% if current %}
+    <p class="muted small">#{{ current.position + 1 }} · {{ current.audio_path }}</p>
+    <p><span class="status {{ 'active' if current.status == 'confirmed' else 'inactive' }}">{{ current.status }}</span>
+      <span class="muted small">Phiên bản {{ current.version }}</span></p>
+    <audio id="audio-player" controls preload="metadata" class="label-audio">
+      <source src="/labeling/{{ dataset.id }}/audio/{{ current.id }}">
+      Trình duyệt không hỗ trợ định dạng audio này.
+    </audio>
+    <div class="muted small">Nếu audio không phát được, hãy kiểm tra định dạng file và khả năng hỗ trợ của trình duyệt.</div>
+    <div class="label-field">
+      <div class="field-label">Nhãn gốc (chỉ đọc)</div>
+      <div class="original-label">{{ current.original_label if current.original_label else '— Chưa có nhãn gốc —' }}</div>
+    </div>
+    {% if can_edit %}
+      <form id="confirm-form" method="post" action="/labeling/{{ dataset.id }}/confirm" class="stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="sample_id" value="{{ current.id }}">
+        <input type="hidden" name="version" value="{{ current.version }}">
+        <label>Nhãn chỉnh sửa
+          <textarea id="label-text" name="label" rows="5" maxlength="10000" placeholder="Nghe audio rồi nhập nội dung...">{{ draft_label if draft_label is not none else current.current_label }}</textarea>
+        </label>
+        <label class="inline-check"><input type="checkbox" name="no_speech" value="true" id="no-speech">Xác nhận audio không có lời nói (nhãn để trống)</label>
+        <div class="label-actions">
+          <button class="btn secondary" type="submit">Xác nhận & lưu</button>
+          <button class="btn primary" type="submit" name="next_after_save" value="true">Xác nhận & tiếp theo</button>
+        </div>
+      </form>
+      <form method="post" action="/labeling/{{ dataset.id }}/release" class="release-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="sample_id" value="{{ current.id }}">
+        <button type="submit" class="btn secondary">Bỏ qua (không sửa nhãn)</button>
+      </form>
+      <p class="muted small">Phím tắt: Ctrl+Enter = Xác nhận; Alt+P = phát/dừng audio. Khóa được gia hạn khi tab còn hoạt động.</p>
+      <div id="lease-warning" class="notice error" hidden>Khóa audio đã hết hạn. Hãy mở lại mẫu trước khi lưu.</div>
+      <script>
+      (() => {
+        const audio = document.getElementById('audio-player');
+        // Trình duyệt có thể từ chối tự phát nếu chưa có tương tác của người dùng.
+        audio.play().catch(() => {});
+        const form = document.getElementById('confirm-form');
+        const noSpeech = document.getElementById('no-speech');
+        const label = document.getElementById('label-text');
+        noSpeech.addEventListener('change', () => { if(noSpeech.checked){label.value = ''; label.disabled = true;} else {label.disabled = false;} });
+        document.addEventListener('keydown', event => {
+          if(event.altKey && event.key.toLowerCase() === 'p') { event.preventDefault(); audio.paused ? audio.play().catch(()=>{}) : audio.pause(); }
+          if(event.ctrlKey && event.key === 'Enter') { event.preventDefault(); form.requestSubmit(); }
+        });
+        const heartbeat = async () => {
+          try {
+            const response = await fetch('/labeling/{{ dataset.id }}/heartbeat/{{ current.id }}', {
+              method: 'POST', headers: {'X-CSRF-Token': {{ csrf_token|tojson }}}
+            });
+            if(!response.ok) {
+              document.getElementById('lease-warning').hidden = false;
+              form.querySelectorAll('button[type=submit]').forEach(b => b.disabled = true);
+            }
+          } catch (error) { /* Mất mạng: lần lưu sau sẽ kiểm tra lại quyền giữ mẫu. */ }
+        };
+        setInterval(heartbeat, 30000);
+      })();
+      </script>
+    {% else %}
+      <div class="notice error">Audio không được phiên hiện tại giữ hoặc khóa đã hết hạn. Hãy chọn lại mẫu trong danh sách để chỉnh sửa.</div>
+    {% endif %}
+    {% else %}
+    <p class="muted">Nhấn <b>Nhận audio pending tiếp theo</b> hoặc mở một mẫu từ danh sách bên phải.</p>
+    {% endif %}
+  </section>
+  <aside class="card label-list">
+    <h2>Danh sách audio</h2>
+    <div class="label-filters">
+      {% for name, caption in [('pending','Pending'), ('confirmed','Confirmed'), ('all','Tất cả')] %}
+      <a href="/labeling/{{ dataset.id }}?status={{ name }}" class="filter-link {{ 'chosen' if filter_status == name else '' }}">{{ caption }}</a>
+      {% endfor %}
+    </div>
+    <div class="sample-list">
+      {% for sample in samples %}
+      <form class="sample-row" action="/labeling/{{ dataset.id }}/open" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="sample_id" value="{{ sample.id }}">
+        <div class="sample-info"><span class="small muted">#{{ sample.position + 1 }} · {{ sample.status }}</span>
+          <div class="sample-path">{{ sample.audio_path }}</div></div>
+        <button class="btn secondary compact" type="submit">Mở</button>
+      </form>
+      {% else %}
+      <p class="muted">Không có audio trong bộ lọc này.</p>
+      {% endfor %}
+    </div>
+    <div class="pager">
+      {% if page > 1 %}<a href="/labeling/{{ dataset.id }}?status={{ filter_status }}&page={{ page - 1 }}">← Trước</a>{% endif %}
+      <span>Trang {{ page }}</span>
+      {% if samples|length == 30 %}<a href="/labeling/{{ dataset.id }}?status={{ filter_status }}&page={{ page + 1 }}">Sau →</a>{% endif %}
+    </div>
+  </aside>
+</div>
+{% endblock %}
