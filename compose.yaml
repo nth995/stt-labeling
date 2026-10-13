@@ -1,0 +1,13 @@
+
+services:
+  web:
+    build: .
+    container_name: stt-labeling
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./state:/app/state
+    env_file:
+      - .env
+    restart: unless-stopped
