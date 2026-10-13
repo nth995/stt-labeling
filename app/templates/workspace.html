@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Không gian gán nhãn · STT Labeling{% endblock %}
 {% block content %}
-<section class="card center-card">
-  <div class="eyebrow">ANNOTATOR</div>
-  <h1>Xin chào, {{ user.username }}!</h1>
-  <p class="muted">Đăng nhập thành công. Giao diện gán nhãn audio và danh sách dataset được cấp quyền sẽ được bổ sung ở bước tiếp theo.</p>
+<div class="page-head"><div><div class="eyebrow">ANNOTATOR</div><h1>Xin chào, {{ user.username }}!</h1>
+  <p class="muted">Danh sách bộ dữ liệu do Admin cấp quyền. Trang nghe và sửa nhãn sẽ được bổ sung ở giai đoạn kế tiếp.</p></div></div>
+{% if not datasets %}
+<section class="card"><h2>Chưa có dataset được cấp quyền</h2><p class="muted">Liên hệ Admin để được cấp quyền trong mục <b>Dataset và phân quyền</b>.</p></section>
+{% else %}
+{% for dataset in datasets %}
+<section class="card dset-card"><div class="dset-head"><h2>{{ dataset.folder_name }}</h2>
+  <span class="status inactive">Chưa triển khai màn hình gán nhãn</span></div>
+  <p class="muted">Dataset đã được cấp quyền. Chức năng phát audio và xác nhận nhãn sẽ có ở bước tiếp theo.</p>
 </section>
+{% endfor %}
+{% endif %}
 {% endblock %}

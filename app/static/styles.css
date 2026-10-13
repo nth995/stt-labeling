@@ -43,3 +43,19 @@ th { color:var(--muted); font-size:12px; font-weight:600; }
 .note { margin-top:20px; }
 @media(max-width:900px){.admin-layout{grid-template-columns:1fr}.topbar{padding:0 20px}}
 @media(max-width:600px){.container{padding:20px 12px}.topbar{gap:8px}.header-right .muted{display:none}.card{padding:18px}.page-head{align-items:flex-start;flex-direction:column}}
+
+/* Trang quản lý bộ dữ liệu và phân quyền */
+.nav-link { color: var(--primary); font-size: 13px; text-decoration:none; font-weight:600; }
+.nav-link:hover { text-decoration:underline; }
+.dset-card { margin-bottom: 18px; }
+.dset-head { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+.dset-head h2 { margin:0; }
+.dset-meta { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0; }
+.dset-meta span { font-size: 13px; }
+.dset-warning { background:#fff7e8; color:#874d00; padding:12px; border-radius:8px; margin:14px 0; }
+.dset-users { display:flex; gap:12px 20px; flex-wrap:wrap; align-items:center; }
+.dset-users label { display:inline-flex; align-items:center; flex-direction:row; gap:7px; font-size:13px; }
+.dset-users input { width:auto; }
+.dset-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:16px 0 22px; }
+.dset-row-note { border-top:1px solid var(--line); padding-top:16px; margin-top:16px; }
+@media(max-width:600px) {.nav-link { font-size:12px; }}

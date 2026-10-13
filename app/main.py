@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.database.connection import initialize_database
-from app.routes import admin, auth
+from app.routes import admin, admin_datasets, auth
 from app.services.auth_service import validate_session_secret
 
 
@@ -26,3 +26,4 @@ app.mount(
 )
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(admin_datasets.router)

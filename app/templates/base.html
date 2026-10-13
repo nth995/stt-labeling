@@ -11,6 +11,10 @@
     <div class="brand"><span class="brand-mark">STT</span><span>Labeling Tool</span></div>
     {% if user is defined and user %}
     <div class="header-right">
+      {% if user.role == "admin" %}
+      <a class="nav-link" href="/admin">Tài khoản</a>
+      <a class="nav-link" href="/admin/datasets">Datasets</a>
+      {% endif %}
       <span class="muted">{{ user.username }} · {{ 'Quản trị' if user.role == 'admin' else 'Gán nhãn' }}</span>
       <form action="/logout" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

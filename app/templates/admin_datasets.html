@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Quản lý dataset · STT Labeling{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="eyebrow">QUẢN TRỊ</div><h1>Dataset và phân quyền</h1>
+    <p class="muted">Quét các thư mục trong <code>data/</code>, chuẩn bị CSV và cấp quyền cho Annotator.</p></div>
+  <div class="count">{{ datasets|length }} dataset đã đăng ký</div>
+</div>
+{% if message %}<div class="notice success">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+<div class="dset-toolbar">
+  <form method="post" action="/admin/datasets/scan">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn primary">Quét thư mục data/</button>
+  </form>
+  <a class="nav-link" href="/admin">← Quản lý tài khoản</a>
+  {% if unregistered %}<span class="muted small">Chưa đăng ký: {{ unregistered|join(', ') }}</span>{% endif %}
+</div>
+{% if not datasets %}
+<section class="card"><h2>Chưa đăng ký dataset</h2>
+<p class="muted">Đưa thư mục dữ liệu vào <code>data/ten_dataset/</code>, sau đó nhấn <b>Quét thư mục data/</b>. Nếu chưa có <code>label.csv</code>, ứng dụng có thể tạo file từ các audio được tìm thấy.</p>
+</section>
+{% endif %}
+{% for entry in datasets %}
+{% set dataset = entry.record %}
+<section class="card dset-card">
+  <div class="dset-head">
+    <h2>{{ dataset.folder_name }}</h2>
+    {% if entry.missing %}<span class="status inactive">Không tìm thấy thư mục</span>
+    {% elif entry.details.ready %}<span class="status active">Sẵn sàng</span>
+    {% else %}<span class="status inactive">Cần chuẩn bị</span>{% endif %}
+  </div>
+  {% if entry.missing %}
+  <p class="dset-warning">Thư mục dữ liệu không còn trong <code>data/</code>. Quyền được giữ lại trong SQLite, nhưng không thể mở dữ liệu.</p>
+  {% else %}
+  {% set item = entry.details %}
+  <div class="dset-meta">
+    <span>Tổng audio (trong CSV hoặc thư mục): <strong>{{ item.audio_count }}</strong></span>
+    <span>Nhãn trống: <strong>{{ item.unlabeled_count }}</strong></span>
+    <span>Đường dẫn không hợp lệ: <strong>{{ item.invalid_count }}</strong></span>
+    <span><code>label.csv</code>: <strong>{{ 'Có' if item.has_labels else 'Chưa có' }}</strong></span>
+    <span><code>label_reviewed.csv</code>: <strong>{{ 'Có' if item.has_reviewed else 'Chưa có' }}</strong></span>
+  </div>
+  {% if item.error %}<p class="dset-warning">Lỗi dữ liệu CSV: {{ item.error }}</p>{% endif %}
+  {% if item.invalid_count %}<p class="dset-warning">Hãy sửa các đường dẫn audio trong label.csv trước khi cấp quyền.</p>{% endif %}
+  {% if not item.ready %}
+  <form method="post" action="/admin/datasets/{{ dataset.id }}/initialize">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn secondary">Khởi tạo CSV còn thiếu</button>
+    <p class="muted small">Không ghi đè CSV có sẵn. Nếu chưa có label.csv, tìm audio đệ quy và tạo nhãn trống. label_reviewed.csv mới sẽ có trạng thái pending.</p>
+  </form>
+  {% endif %}
+  {% endif %}
+  <div class="dset-row-note">
+    <strong>Annotator được phép truy cập</strong>
+    <p class="muted small">Tích chọn tài khoản rồi nhấn Lưu phân quyền. Bỏ chọn để thu hồi quyền.</p>
+    <form method="post" action="/admin/datasets/{{ dataset.id }}/permissions" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="dset-users">
+      {% for account in annotators %}
+        <label><input type="checkbox" name="user_ids" value="{{ account.id }}"
+          {% if (account.id, dataset.id) in assigned %}checked{% endif %}>
+          {{ account.username }} {% if not account.is_active %}(đã khóa){% endif %}
+        </label>
+      {% else %}<span class="muted small">Chưa có tài khoản Annotator.</span>{% endfor %}
+      </div>
+      <div><button type="submit" class="btn primary" {% if entry.missing or not entry.details.ready %}disabled{% endif %}>Lưu phân quyền</button></div>
+    </form>
+  </div>
+</section>
+{% endfor %}
+<p class="muted small">Bước này chỉ cấu hình dataset và phân quyền. Chức năng phát audio, xác nhận nhãn và ghi SQLite sẽ được bổ sung ở giai đoạn kế tiếp.</p>
+{% endblock %}

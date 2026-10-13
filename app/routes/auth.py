@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import User
+from app.database.models import Dataset, User, UserDataset
 from app.services.auth_service import (
     COOKIE_NAME,
     PASSWORD_HASHER,
@@ -104,8 +104,20 @@ def workspace(request: Request, db: Session = Depends(get_db)):
     context = get_auth_context(request, db)
     if context is None:
         return RedirectResponse("/login", status_code=303)
+    if context.user.role == "admin":
+        return RedirectResponse("/admin/datasets", status_code=303)
+    datasets = db.scalars(
+        select(Dataset)
+        .join(UserDataset, UserDataset.dataset_id == Dataset.id)
+        .where(UserDataset.user_id == context.user.id)
+        .order_by(Dataset.folder_name)
+    ).all()
     return templates.TemplateResponse(
         request=request,
         name="workspace.html",
-        context={"user": context.user, "csrf_token": get_csrf_token(context)},
+        context={
+            "user": context.user,
+            "csrf_token": get_csrf_token(context),
+            "datasets": datasets,
+        },
     )
